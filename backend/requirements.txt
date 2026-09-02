@@ -1,0 +1,10 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+mediapipe==1.0.0
+opencv-python-headless==5.0.0.93
+numpy==2.5.1
+pyjwt[crypto]==2.13.0
+httpx==0.28.1
+python-dotenv==1.2.2
+anthropic==0.120.2
+supabase==2.31.0
