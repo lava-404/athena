@@ -5,6 +5,8 @@ import type {
   ChatMessage,
   NudgeCategory,
   NudgeSensitivity,
+  PostureLandmarks,
+  PostureStatus,
   SessionLockState,
 } from "@/types";
 
@@ -34,6 +36,13 @@ interface SessionStore {
   facePresent: boolean;
   isCalibrated: boolean;
 
+  // Backend-computed posture read used to drive the skeleton overlay: a
+  // 2-tone status (already thresholded against this session's sensitivity)
+  // and the raw keypoints to draw. Both come straight from the "scores"
+  // websocket message — no geometry/threshold logic lives in the frontend.
+  postureStatus: PostureStatus;
+  postureLandmarks: PostureLandmarks | null;
+
   fatigueScore: number;
   sessionSeconds: number;
   breakSecondsRemaining: number;
@@ -55,6 +64,8 @@ interface SessionStore {
     pose_present: boolean;
     face_present: boolean;
     is_calibrated: boolean;
+    posture_status: PostureStatus;
+    landmarks: PostureLandmarks | null;
   }) => void;
   applyBackendNudge: (nudge: { category: NudgeCategory; message: string }) => void;
   setBackendSessionId: (id: string | null) => void;
@@ -96,6 +107,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   posePresent: true,
   facePresent: true,
   isCalibrated: false,
+
+  postureStatus: "good",
+  postureLandmarks: null,
 
   fatigueScore: 0,
   sessionSeconds: 0,
@@ -152,6 +166,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       posePresent: scores.pose_present,
       facePresent: scores.face_present,
       isCalibrated: scores.is_calibrated,
+      postureStatus: scores.posture_status,
+      postureLandmarks: scores.landmarks,
     });
 
     // While the backend is still learning this person's baseline, keep the

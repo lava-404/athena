@@ -4,6 +4,16 @@ Same heuristic approach as the rest of the product: calibrate to THIS
 person's upright baseline in the first couple of seconds of a session, then
 score every later frame as a deviation from their own normal rather than a
 fixed "ideal" angle. See the project README for the full rationale.
+
+This module also exposes `extract_overlay_points`, which returns the small
+set of normalized keypoints the frontend draws as a color-coded skeleton
+over the local user's video tile (green while posture matches their
+baseline, coral once they're slouching). This is intentionally separate
+from `FrameMetrics`/scoring: the overlay should degrade gracefully and show
+whatever points ARE visible even on a frame that's too incomplete to
+produce a score, whereas scoring needs every required landmark or it bails
+out entirely. No posture judgement happens outside this file/websocket
+message — the frontend only renders points and a color it's given.
 """
 from __future__ import annotations
 
@@ -19,6 +29,20 @@ L_HIP, R_HIP = 23, 24
 
 VISIBILITY_MIN = 0.5
 CALIBRATION_SAMPLES = 45  # ~2s at the ~2.5 samples/sec the frontend streams
+
+# Keypoints sent to the frontend for the skeleton overlay. Keys here are
+# exactly the keys that appear in the "landmarks" object of the "scores"
+# websocket message (see app/main.py) and that
+# src/components/PostureSkeletonOverlay.tsx expects.
+_OVERLAY_LANDMARKS: dict[str, int] = {
+    "nose": NOSE,
+    "l_ear": L_EAR,
+    "r_ear": R_EAR,
+    "l_shoulder": L_SHOULDER,
+    "r_shoulder": R_SHOULDER,
+    "l_hip": L_HIP,
+    "r_hip": R_HIP,
+}
 
 
 @dataclass
@@ -68,6 +92,25 @@ def extract_frame_metrics(landmarks: Sequence) -> Optional[FrameMetrics]:
         nose_x=nose.x,
         nose_offset_from_ear_mid=nose.x - ear_mid_x,
     )
+
+
+def extract_overlay_points(landmarks: Sequence) -> Optional[dict[str, tuple[float, float]]]:
+    """Return normalized (x, y) keypoints for the frontend's skeleton overlay.
+
+    Unlike `extract_frame_metrics`, this does not require every landmark to
+    be present — it includes whichever of the overlay keypoints clear the
+    visibility threshold and silently omits the rest, so a partially
+    occluded frame still draws a partial skeleton instead of none at all.
+    Returns None only when NOT ONE keypoint is visible.
+    """
+    points: dict[str, tuple[float, float]] = {}
+    for name, index in _OVERLAY_LANDMARKS.items():
+        landmark = landmarks[index]
+        vis = getattr(landmark, "visibility", 1.0)
+        if vis is not None and vis < VISIBILITY_MIN:
+            continue
+        points[name] = (round(landmark.x, 4), round(landmark.y, 4))
+    return points or None
 
 
 def _clamp(n: float, lo: float = 0, hi: float = 100) -> float:

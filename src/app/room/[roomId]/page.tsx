@@ -34,6 +34,14 @@ export default function RoomPage() {
   const settings = useSessionStore((s) => s.settings);
   const startLockIn = useSessionStore((s) => s.startLockIn);
 
+  // Live posture read from the AI backend, for the skeleton overlay on the
+  // local video tile. Only meaningful (and only drawn) once locked in,
+  // calibrated, and the backend currently sees a body in frame.
+  const postureLandmarks = useSessionStore((s) => s.postureLandmarks);
+  const postureStatus = useSessionStore((s) => s.postureStatus);
+  const isCalibrated = useSessionStore((s) => s.isCalibrated);
+  const posePresent = useSessionStore((s) => s.posePresent);
+
   useSessionTimer();
   const { status: visionStatus } = useBackendVision({
     videoRef,
@@ -70,6 +78,10 @@ export default function RoomPage() {
   }
 
   const isLocked = lockState === "locked";
+  // Screen-sharing swaps the local tile's video feed to the screen capture,
+  // which the backend never sees — so the posture overlay only makes sense
+  // while the actual webcam feed is what's on screen.
+  const showPostureOverlay = isLocked && !screenSharing && isCalibrated && posePresent;
 
   return (
     <div className="flex h-screen flex-col bg-paper">
@@ -94,6 +106,9 @@ export default function RoomPage() {
                 cameraOn={screenSharing ? true : cameraOn}
                 micOn={micOn}
                 isLocal
+                postureLandmarks={postureLandmarks}
+                postureStatus={postureStatus}
+                showPostureOverlay={showPostureOverlay}
               />
               <div className="flex items-center justify-center rounded-2xl border border-dashed border-ink/15 text-sm text-ink-soft">
                 Waiting for others to join · share the room link to invite them

@@ -18,7 +18,7 @@ from app.session import store
 from app.session.manager import SENSITIVITY_CONFIG, SessionState
 from app.vision.gaze import compute_focus_score, extract_gaze_metrics
 from app.vision.models import create_face_landmarker, create_pose_landmarker, ensure_models_downloaded
-from app.vision.pose import PostureCalibrator, extract_frame_metrics
+from app.vision.pose import PostureCalibrator, extract_frame_metrics, extract_overlay_points
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("focusroom.main")
@@ -121,11 +121,25 @@ async def vision_socket(websocket: WebSocket, token: str | None = None, room_id:
 
             pose_present = bool(pose_result.pose_landmarks)
             posture_score = 60.0  # neutral-ish if we briefly lose the body
+            overlay_landmarks: dict[str, tuple[float, float]] | None = None
             if pose_present:
-                metrics = extract_frame_metrics(pose_result.pose_landmarks[0])
+                raw_landmarks = pose_result.pose_landmarks[0]
+                metrics = extract_frame_metrics(raw_landmarks)
                 if metrics is not None:
                     calibrator.add_sample(metrics)
                     posture_score = calibrator.score(metrics)
+                # Independent of whether scoring succeeded — the overlay
+                # should show whatever points are visible even mid-turn.
+                overlay_landmarks = extract_overlay_points(raw_landmarks)
+
+            # Same threshold the nudge state machine uses for this session's
+            # sensitivity, so the overlay's color always agrees with
+            # whether Buddy would actually consider this "slouching".
+            posture_status = (
+                "slouching"
+                if pose_present and posture_score < SENSITIVITY_CONFIG[session.sensitivity].posture_threshold
+                else "good"
+            )
 
             face_present = bool(face_result.face_landmarks)
             gaze_metrics = None
@@ -142,6 +156,8 @@ async def vision_socket(websocket: WebSocket, token: str | None = None, room_id:
                     "pose_present": pose_present,
                     "face_present": face_present,
                     "is_calibrated": calibrator.is_calibrated,
+                    "posture_status": posture_status,
+                    "landmarks": overlay_landmarks,
                 }
             )
 

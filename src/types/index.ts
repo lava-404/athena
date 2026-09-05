@@ -18,6 +18,33 @@ export type NudgeSensitivity = "gentle" | "normal" | "strict";
  * (see backend/app/nudges/generator.py NudgeCategory). */
 export type NudgeCategory = "posture" | "away" | "distracted" | "break" | "break-insistent";
 
+/** Simple 2-tone read of posture, computed backend-side against the SAME
+ * per-sensitivity threshold that drives posture nudges (see
+ * backend/app/session/manager.py SENSITIVITY_CONFIG) — so the skeleton
+ * overlay's color always agrees with whether Buddy would actually flag
+ * this as slouching. */
+export type PostureStatus = "good" | "slouching";
+
+/** Normalized (x, y) position of one MediaPipe landmark, each in [0, 1]
+ * relative to the raw video frame — NOT the container's rendered size.
+ * See PostureSkeletonOverlay for how these map onto the on-screen video. */
+export type NormalizedPoint = [number, number];
+
+/** The small set of upper-body keypoints the backend sends for drawing the
+ * posture skeleton overlay. Keys match `_OVERLAY_LANDMARKS` in
+ * backend/app/vision/pose.py exactly. Any key may be missing if that point
+ * wasn't visible enough in this frame — the overlay draws whatever's
+ * present rather than requiring the full set. */
+export interface PostureLandmarks {
+  nose?: NormalizedPoint;
+  l_ear?: NormalizedPoint;
+  r_ear?: NormalizedPoint;
+  l_shoulder?: NormalizedPoint;
+  r_shoulder?: NormalizedPoint;
+  l_hip?: NormalizedPoint;
+  r_hip?: NormalizedPoint;
+}
+
 /** One "scores" message from the AI backend's websocket. All inference
  * (posture geometry + gaze/attention) happens in Python — this is just the
  * shape of what comes back. */
@@ -28,6 +55,8 @@ export interface BackendScoreMessage {
   pose_present: boolean;
   face_present: boolean;
   is_calibrated: boolean;
+  posture_status: PostureStatus;
+  landmarks: PostureLandmarks | null;
 }
 
 export interface BackendNudgeMessage {
